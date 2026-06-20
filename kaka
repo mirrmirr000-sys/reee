@@ -1,30 +1,42 @@
--- SBBF CFW Safest High Hover for Ranged Solo
--- Minimal movement changes + light regen | Low detection risk
+-- SBBF CFW Hover v3 - Auto Aim + Auto Click | Balanced Height | Godmode | Auto Restart
+-- Optimized for ranged users
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local root = character:WaitForChild("HumanoidRootPart")
+local character, humanoid, root
 
-print("🛡️ Safest CFW Hover Loaded - Stay high and outrange him")
-
-local HOVER_HEIGHT = 65          -- Balanced safe height (60-80 recommended)
-local SMOOTH_SPEED = 12          -- Very gentle movement
-local BOSS_OFFSET = Vector3.new(0, HOVER_HEIGHT, 0)
-
-local targetBoss = nil
+local HOVER_HEIGHT = 75          -- Balanced - should dodge Ruby Drill without being too high
+local SMOOTH_SPEED = 13
 local enabled = true
 
+local function setupCharacter()
+    character = player.Character or player.CharacterAdded:Wait()
+    humanoid = character:WaitForChild("Humanoid")
+    root = character:WaitForChild("HumanoidRootPart")
+    
+    -- Strong Godmode
+    humanoid.MaxHealth = math.huge
+    humanoid.Health = math.huge
+    
+    humanoid.Died:Connect(function()
+        wait(2) -- wait for respawn
+        setupCharacter() -- Restart script logic on death
+    end)
+end
+
+setupCharacter()
+
+print("🛡️ CFW Hover v3 Loaded - Auto Aim + Click | Godmode Active")
+
 local function findCFW()
-    for _, obj in ipairs(Workspace:GetDescendants()) do
+    for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:FindFirstChild("Humanoid") and obj.Humanoid.Health > 0 then
             local name = obj.Name:lower()
-            if name:find("cazar") or name:find("cfw") or name:find("fallen warrior") then
+            if name:find("cazar") or name:find("cfw") or name:find("fallen") then
                 return obj
             end
         end
@@ -32,58 +44,63 @@ local function findCFW()
     return nil
 end
 
--- Very smooth hover (less detectable than full CFrame fly)
+-- Main Loop
 local connection
-connection = RunService.Heartbeat:Connect(function(dt)
-    if not enabled or not root then return end
+connection = RunService.Heartbeat:Connect(function()
+    if not enabled or not root or not humanoid then return end
     
-    targetBoss = findCFW()
-    if not targetBoss then return end
+    local boss = findCFW()
+    if not boss then return end
     
-    local bossPos = targetBoss:GetPivot().Position
-    local targetPos = bossPos + BOSS_OFFSET + Vector3.new(math.sin(tick())*8, math.sin(tick()*1.5)*3, math.cos(tick())*8) -- natural-looking bob + orbit
+    local bossPos = boss:GetPivot().Position
+    local targetPos = bossPos + Vector3.new(0, HOVER_HEIGHT, 0) 
+                     + Vector3.new(math.sin(tick()*0.7)*10, 5, math.cos(tick()*0.7)*10)
     
     local direction = (targetPos - root.Position)
     local distance = direction.Magnitude
     
-    if distance > 8 then
-        -- Gentle velocity (low acceleration)
-        root.Velocity = direction.Unit * SMOOTH_SPEED * math.min(distance / 20, 1.8)
+    if distance > 12 then
+        root.Velocity = direction.Unit * SMOOTH_SPEED * math.min(distance / 30, 1.8)
     else
-        -- Tiny bob to look legit
-        root.Velocity = Vector3.new(0, 3 + math.sin(tick()*2)*2, 0)
+        root.Velocity = Vector3.new(0, 3 + math.sin(tick()*2.5)*2, 0)
     end
     
-    -- Face boss naturally
+    -- Strong Auto Aim
     local lookCFrame = CFrame.lookAt(root.Position, bossPos)
-    root.CFrame = root.CFrame:Lerp(lookCFrame * CFrame.Angles(0, math.rad(180), 0), 0.15)
+    root.CFrame = root.CFrame:Lerp(lookCFrame * CFrame.Angles(0, math.rad(180), 0), 0.3)
+    
+    -- Auto Click (simulates left click for ranged attacks)
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton1(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    end)
 end)
 
--- Very light regen (helps survive without looking like godmode)
+-- Light + Godmode regen
 spawn(function()
-    while wait(0.8) do
-        if enabled and humanoid and humanoid.Health > 0 then
-            humanoid.Health = math.min(humanoid.Health + 8, humanoid.MaxHealth)
+    while wait(0.4) do
+        if humanoid then
+            humanoid.Health = math.huge
         end
     end
 end)
 
-print("Hover active! Position yourself near CFW - it will lift you safely.")
-print("Spam your ranged attacks normally. Ctrl to toggle on/off.")
+print("✅ Hover + Auto Aim + Auto Click Active!")
+print("Left Ctrl = Toggle | Left Shift = +Height | Left Alt = -Height")
 
--- Toggle with Left Ctrl
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.LeftControl then
         enabled = not enabled
-        print("Hover " .. (enabled and "ENABLED" or "DISABLED"))
-        if enabled then
-            root.Velocity = Vector3.new(0, 10, 0) -- soft launch
-        end
+        print("Hover " .. (enabled and "ON" or "OFF"))
+    elseif input.KeyCode == Enum.KeyCode.LeftShift then
+        HOVER_HEIGHT = HOVER_HEIGHT + 10
+        print("Height ↑ " .. HOVER_HEIGHT)
+    elseif input.KeyCode == Enum.KeyCode.LeftAlt then
+        HOVER_HEIGHT = math.max(50, HOVER_HEIGHT - 10)
+        print("Height ↓ " .. HOVER_HEIGHT)
     end
 end)
 
--- Cleanup on death
-player.CharacterRemoving:Connect(function()
-    if connection then connection:Disconnect() end
-end)
+-- Full script restart support
+player.CharacterAdded:Connect(setupCharacter)
