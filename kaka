@@ -1,0 +1,89 @@
+-- SBBF CFW Safest High Hover for Ranged Solo
+-- Minimal movement changes + light regen | Low detection risk
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local root = character:WaitForChild("HumanoidRootPart")
+
+print("🛡️ Safest CFW Hover Loaded - Stay high and outrange him")
+
+local HOVER_HEIGHT = 65          -- Balanced safe height (60-80 recommended)
+local SMOOTH_SPEED = 12          -- Very gentle movement
+local BOSS_OFFSET = Vector3.new(0, HOVER_HEIGHT, 0)
+
+local targetBoss = nil
+local enabled = true
+
+local function findCFW()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:FindFirstChild("Humanoid") and obj.Humanoid.Health > 0 then
+            local name = obj.Name:lower()
+            if name:find("cazar") or name:find("cfw") or name:find("fallen warrior") then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+
+-- Very smooth hover (less detectable than full CFrame fly)
+local connection
+connection = RunService.Heartbeat:Connect(function(dt)
+    if not enabled or not root then return end
+    
+    targetBoss = findCFW()
+    if not targetBoss then return end
+    
+    local bossPos = targetBoss:GetPivot().Position
+    local targetPos = bossPos + BOSS_OFFSET + Vector3.new(math.sin(tick())*8, math.sin(tick()*1.5)*3, math.cos(tick())*8) -- natural-looking bob + orbit
+    
+    local direction = (targetPos - root.Position)
+    local distance = direction.Magnitude
+    
+    if distance > 8 then
+        -- Gentle velocity (low acceleration)
+        root.Velocity = direction.Unit * SMOOTH_SPEED * math.min(distance / 20, 1.8)
+    else
+        -- Tiny bob to look legit
+        root.Velocity = Vector3.new(0, 3 + math.sin(tick()*2)*2, 0)
+    end
+    
+    -- Face boss naturally
+    local lookCFrame = CFrame.lookAt(root.Position, bossPos)
+    root.CFrame = root.CFrame:Lerp(lookCFrame * CFrame.Angles(0, math.rad(180), 0), 0.15)
+end)
+
+-- Very light regen (helps survive without looking like godmode)
+spawn(function()
+    while wait(0.8) do
+        if enabled and humanoid and humanoid.Health > 0 then
+            humanoid.Health = math.min(humanoid.Health + 8, humanoid.MaxHealth)
+        end
+    end
+end)
+
+print("Hover active! Position yourself near CFW - it will lift you safely.")
+print("Spam your ranged attacks normally. Ctrl to toggle on/off.")
+
+-- Toggle with Left Ctrl
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.LeftControl then
+        enabled = not enabled
+        print("Hover " .. (enabled and "ENABLED" or "DISABLED"))
+        if enabled then
+            root.Velocity = Vector3.new(0, 10, 0) -- soft launch
+        end
+    end
+end)
+
+-- Cleanup on death
+player.CharacterRemoving:Connect(function()
+    if connection then connection:Disconnect() end
+end)
