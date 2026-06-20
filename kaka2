@@ -1,0 +1,86 @@
+-- SBBF CFW Safest High Hover v2 (Anti Ruby Drill)
+-- Higher altitude + better auto-aim for ranged
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local root = character:WaitForChild("HumanoidRootPart")
+
+print("🛡️ CFW High Hover v2 Loaded - Anti Ruby Drill")
+
+local HOVER_HEIGHT = 120        -- Higher to avoid Ruby Drill (you can lower with Ctrl)
+local SMOOTH_SPEED = 14
+local enabled = true
+
+local function findCFW()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:FindFirstChild("Humanoid") and obj.Humanoid.Health > 0 then
+            local name = obj.Name:lower()
+            if name:find("cazar") or name:find("cfw") or name:find("fallen") then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+
+local connection
+connection = RunService.Heartbeat:Connect(function()
+    if not enabled or not root then return end
+    
+    local boss = findCFW()
+    if not boss then return end
+    
+    local bossPos = boss:GetPivot().Position
+    local targetPos = bossPos + Vector3.new(0, HOVER_HEIGHT, 0) 
+                     + Vector3.new(math.sin(tick()*0.8)*12, math.sin(tick()*1.3)*4, math.cos(tick()*0.8)*12)
+    
+    local direction = (targetPos - root.Position)
+    local distance = direction.Magnitude
+    
+    if distance > 10 then
+        root.Velocity = direction.Unit * SMOOTH_SPEED * math.min(distance / 25, 2)
+    else
+        root.Velocity = Vector3.new(0, 4 + math.sin(tick()*3)*2, 0)
+    end
+    
+    -- Stronger auto-aim
+    local lookCFrame = CFrame.lookAt(root.Position, bossPos)
+    root.CFrame = root.CFrame:Lerp(lookCFrame * CFrame.Angles(0, math.rad(180), 0), 0.25)
+end)
+
+-- Light regen
+spawn(function()
+    while wait(0.7) do
+        if enabled and humanoid and humanoid.Health > 0 then
+            humanoid.Health = math.min(humanoid.Health + 9, humanoid.MaxHealth)
+        end
+    end
+end)
+
+print("✅ Hover active! Get near CFW - it will lift you high.")
+print("Left Ctrl = Toggle | Left Shift = Increase Height | Left Alt = Decrease Height")
+
+-- Controls
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.LeftControl then
+        enabled = not enabled
+        print("Hover " .. (enabled and "ON" or "OFF"))
+    elseif input.KeyCode == Enum.KeyCode.LeftShift then
+        HOVER_HEIGHT = HOVER_HEIGHT + 15
+        print("Height ↑ → " .. HOVER_HEIGHT)
+    elseif input.KeyCode == Enum.KeyCode.LeftAlt then
+        HOVER_HEIGHT = math.max(50, HOVER_HEIGHT - 15)
+        print("Height ↓ → " .. HOVER_HEIGHT)
+    end
+end)
+
+player.CharacterRemoving:Connect(function()
+    if connection then connection:Disconnect() end
+end)
