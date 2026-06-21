@@ -1,42 +1,27 @@
--- SBBF CFW Hover v3 - Auto Aim + Auto Click | Balanced Height | Godmode | Auto Restart
--- Optimized for ranged users
+-- SBBF Carnnelio Noble Solo Script - Dodge + Block + Outcry
+-- Stay far | Block → Outcry | Low detection
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
-local character, humanoid, root
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local root = character:WaitForChild("HumanoidRootPart")
 
-local HOVER_HEIGHT = 75          -- Balanced - should dodge Ruby Drill without being too high
-local SMOOTH_SPEED = 13
-local enabled = true
+print("🛡️ Carnnelio Noble Solo Script Loaded")
 
-local function setupCharacter()
-    character = player.Character or player.CharacterAdded:Wait()
-    humanoid = character:WaitForChild("Humanoid")
-    root = character:WaitForChild("HumanoidRootPart")
-    
-    -- Strong Godmode
-    humanoid.MaxHealth = math.huge
-    humanoid.Health = math.huge
-    
-    humanoid.Died:Connect(function()
-        wait(2) -- wait for respawn
-        setupCharacter() -- Restart script logic on death
-    end)
-end
+local ENABLED = true
+local TARGET_DISTANCE = 55   -- Keep this far (adjust with Shift/Alt)
+local lastAction = 0
 
-setupCharacter()
-
-print("🛡️ CFW Hover v3 Loaded - Auto Aim + Click | Godmode Active")
-
-local function findCFW()
-    for _, obj in ipairs(workspace:GetDescendants()) do
+local function findCarnnelio()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:FindFirstChild("Humanoid") and obj.Humanoid.Health > 0 then
-            local name = obj.Name:lower()
-            if name:find("cazar") or name:find("cfw") or name:find("fallen") then
+            local n = obj.Name:lower()
+            if n:find("carn") or n:find("carnnelio") or n:find("octavius") then
                 return obj
             end
         end
@@ -44,63 +29,87 @@ local function findCFW()
     return nil
 end
 
--- Main Loop
-local connection
-connection = RunService.Heartbeat:Connect(function()
-    if not enabled or not root or not humanoid then return end
-    
-    local boss = findCFW()
-    if not boss then return end
-    
-    local bossPos = boss:GetPivot().Position
-    local targetPos = bossPos + Vector3.new(0, HOVER_HEIGHT, 0) 
-                     + Vector3.new(math.sin(tick()*0.7)*10, 5, math.cos(tick()*0.7)*10)
-    
-    local direction = (targetPos - root.Position)
-    local distance = direction.Magnitude
-    
-    if distance > 12 then
-        root.Velocity = direction.Unit * SMOOTH_SPEED * math.min(distance / 30, 1.8)
-    else
-        root.Velocity = Vector3.new(0, 3 + math.sin(tick()*2.5)*2, 0)
-    end
-    
-    -- Strong Auto Aim
-    local lookCFrame = CFrame.lookAt(root.Position, bossPos)
-    root.CFrame = root.CFrame:Lerp(lookCFrame * CFrame.Angles(0, math.rad(180), 0), 0.3)
-    
-    -- Auto Click (simulates left click for ranged attacks)
-    pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton1(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    end)
-end)
-
--- Light + Godmode regen
+-- Safe light regen
 spawn(function()
-    while wait(0.4) do
-        if humanoid then
-            humanoid.Health = math.huge
+    while wait(0.5) do
+        if humanoid and humanoid.Health > 0 then
+            humanoid.Health = math.min(humanoid.Health + 18, humanoid.MaxHealth)
         end
     end
 end)
 
-print("✅ Hover + Auto Aim + Auto Click Active!")
-print("Left Ctrl = Toggle | Left Shift = +Height | Left Alt = -Height")
+local connection
+connection = RunService.Heartbeat:Connect(function()
+    if not ENABLED or not root then return end
+    
+    local boss = findCarnnelio()
+    if not boss then return end
+    
+    local bossPos = boss:GetPivot().Position
+    local myPos = root.Position
+    local dist = (bossPos - myPos).Magnitude
+    
+    -- Gentle face boss
+    local lookCFrame = CFrame.lookAt(myPos, bossPos)
+    root.CFrame = root.CFrame:Lerp(lookCFrame, 0.15)
+    
+    -- === DISTANCE CONTROL ===
+    if dist < TARGET_DISTANCE - 8 then
+        -- Move back safely
+        local awayDir = (myPos - bossPos).Unit
+        root.Velocity = awayDir * 35 + Vector3.new(0, 8, 0)
+    elseif dist > TARGET_DISTANCE + 15 then
+        -- Move closer slowly
+        local towardDir = (bossPos - myPos).Unit
+        root.Velocity = towardDir * 22
+    else
+        -- Gentle orbit
+        root.Velocity = root.Velocity * 0.7
+    end
+    
+    -- === DODGE + BLOCK LOGIC ===
+    if tick() - lastAction < 0.7 then return end
+    
+    -- Auto Block / Parry when close or during combo (Noble parry key is usually F or specific)
+    if dist < 70 then
+        -- Simulate Block/Parry (change key if your bind is different)
+        keypress(0x46)  -- F key (common for parry)
+        wait(0.05)
+        keyrelease(0x46)
+        
+        -- After successful block → Crimson Outcry (usually X key)
+        wait(0.15)
+        keypress(0x58)  -- X key
+        wait(0.08)
+        keyrelease(0x58)
+        
+        lastAction = tick()
+    end
+end)
+
+print("✅ Script Active!")
+print("Stay near the boss - it will keep distance, dodge, block, and Outcry after block.")
+print("Left Ctrl = Toggle | Left Shift = +Distance | Left Alt = -Distance")
 
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.LeftControl then
-        enabled = not enabled
-        print("Hover " .. (enabled and "ON" or "OFF"))
+        ENABLED = not ENABLED
+        print("Script " .. (ENABLED and "ON" or "OFF"))
     elseif input.KeyCode == Enum.KeyCode.LeftShift then
-        HOVER_HEIGHT = HOVER_HEIGHT + 10
-        print("Height ↑ " .. HOVER_HEIGHT)
+        TARGET_DISTANCE = TARGET_DISTANCE + 8
+        print("Target Distance: " .. TARGET_DISTANCE)
     elseif input.KeyCode == Enum.KeyCode.LeftAlt then
-        HOVER_HEIGHT = math.max(50, HOVER_HEIGHT - 10)
-        print("Height ↓ " .. HOVER_HEIGHT)
+        TARGET_DISTANCE = math.max(35, TARGET_DISTANCE - 8)
+        print("Target Distance: " .. TARGET_DISTANCE)
     end
 end)
 
--- Full script restart support
-player.CharacterAdded:Connect(setupCharacter)
+-- Auto restart on death
+player.CharacterAdded:Connect(function(newChar)
+    wait(1.5)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    root = newChar:WaitForChild("HumanoidRootPart")
+    print("Respawned - Script restarted")
+end)
